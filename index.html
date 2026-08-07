@@ -435,6 +435,9 @@
       font-size: 13.5px;
     }
     .radar-item:last-child { margin-bottom: 0; }
+    .radar-item.severity-danger { border-left-color: var(--danger); }
+    .radar-item.severity-warning { border-left-color: var(--warning); }
+    .radar-item.severity-success { border-left-color: var(--success); }
     .delete-btn {
       background: transparent;
       border: 1px solid var(--border-color);
@@ -751,6 +754,12 @@
               <option value="">Selecione o cartão</option>
             </select>
           </div>
+        </div>
+        <div id="recurring-section" style="display: none; margin-bottom: 1rem;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+            <input type="checkbox" id="trans-recurring">
+            🔁 Repetir todo mês (gasto fixo recorrente)
+          </label>
         </div>
         <button type="submit" id="trans-submit-btn">Adicionar Movimentação</button>
       </form>
@@ -1610,36 +1619,60 @@ function updateRadarFinanceiro() {
   const insights = [];
 
   if (spent === 0 && income === 0) {
-    insights.push('👋 Comece adicionando suas movimentações para ver análises');
+    insights.push({ text: '👋 Comece adicionando suas movimentações para ver análises' });
   } else {
+    const categoryAlerts = globalConfig.categories
+      .filter(cat => cat.limit > 0)
+      .map(cat => {
+        const catSpent = calculateCategorySpent(cat.id);
+        return { cat, catSpent, pct: catSpent / cat.limit };
+      })
+      .filter(c => c.pct >= 0.9)
+      .sort((a, b) => b.pct - a.pct)
+      .slice(0, 3);
+
+    categoryAlerts.forEach(({ cat, catSpent, pct }) => {
+      if (pct >= 1) {
+        insights.push({
+          text: `⚠️ ${cat.emoji} ${cat.name} estourou o limite: R$ ${formatValue(catSpent)} de R$ ${formatValue(cat.limit)}`,
+          severity: 'danger'
+        });
+      } else {
+        insights.push({
+          text: `📊 ${cat.emoji} ${cat.name} está a ${Math.round(pct * 100)}% do limite mensal`,
+          severity: 'warning'
+        });
+      }
+    });
+
     if (income > 0 && spent > 0) {
       const ratio = spent/income;
       if (ratio > 0.9) {
-        insights.push('⚠️ Você está gastando mais de 90% da sua receita');
+        insights.push({ text: '⚠️ Você está gastando mais de 90% da sua receita', severity: 'danger' });
       } else if (ratio > 0.8) {
-        insights.push('⚠️ Você está gastando mais de 80% da sua receita');
+        insights.push({ text: '⚠️ Você está gastando mais de 80% da sua receita', severity: 'warning' });
       } else if (ratio < 0.3) {
-        insights.push('✓ Você está economizando bem este mês');
+        insights.push({ text: '✓ Você está economizando bem este mês', severity: 'success' });
       }
     }
-    
+
     if (totalCardLimit > 0 && cardUsed > 0) {
       const cardRatio = cardUsed / totalCardLimit;
       if (cardRatio > 0.9) {
-        insights.push('⚠️ Seus cartões estão quase no limite');
+        insights.push({ text: '⚠️ Seus cartões estão quase no limite', severity: 'danger' });
       } else if (cardRatio > 0.7) {
-        insights.push('📊 Seus cartões estão utilizando 70% do limite total');
+        insights.push({ text: '📊 Seus cartões estão utilizando 70% do limite total', severity: 'warning' });
       }
     }
 
     if (spent > 0) {
-      insights.push('✓ Você está acompanhando suas despesas');
+      insights.push({ text: '✓ Você está acompanhando suas despesas', severity: 'success' });
     }
   }
 
   const radarEl = document.getElementById('financial-radar');
-  radarEl.innerHTML = insights.length > 0 
-    ? insights.map(i => `<div class="radar-item">${i}</div>`).join('')
+  radarEl.innerHTML = insights.length > 0
+    ? insights.map(i => `<div class="radar-item${i.severity ? ' severity-' + i.severity : ''}">${i.text}</div>`).join('')
     : '<div class="empty-state" style="padding: 1rem;">Nenhum insight no momento</div>';
 }
 
@@ -2398,6 +2431,7 @@ function renderTransactions() {
     empty.textContent = data.transactions.length === 0
       ? 'Nenhuma movimentação ainda'
       : 'Nenhuma movimentação encontrada para esse filtro';
+    list.innerHTML = '';
     return;
   }
 
@@ -2416,7 +2450,7 @@ function renderTransactions() {
     const html = `
       <tr class="${t.id === editingTransactionId ? 'row-editing' : ''}">
         <td>${t.date}</td>
-        <td>${t.description}</td>
+        <td>${t.recurringId ? '🔁 ' : ''}${t.description}</td>
         <td>${cat ? cat.emoji + ' ' + cat.name : 'N/A'}</td>
         <td><span class="badge badge-${typeBadge}">${typeLabel}</span></td>
         <td>${paymentLabel}</td>
@@ -2426,6 +2460,7 @@ function renderTransactions() {
           <div class="row-actions">
             <button class="edit-btn" onclick="editTransaction(${t.id})">Editar</button>
             <button class="delete-btn" onclick="deleteTransaction(${t.id})">Remover</button>
+            ${t.recurringId ? `<button class="delete-btn" onclick="stopRecurringTransaction(${t.recurringId})">Parar repetição</button>` : ''}
           </div>
         </td>
       </tr>
@@ -3162,6 +3197,9 @@ function handleTypeChange() {
   const type = document.getElementById('trans-type').value;
   const section = document.getElementById('installment-section');
   section.style.display = type === 'parcelado' ? 'block' : 'none';
+  const recurringSection = document.getElementById('recurring-section');
+  recurringSection.style.display = type === 'fixo' ? 'block' : 'none';
+  if (type !== 'fixo') document.getElementById('trans-recurring').checked = false;
 }
 
 function handlePaymentChange() {
@@ -3194,6 +3232,7 @@ function addTransaction(e) {
   const value = parseFloat(document.getElementById('trans-value').value) || 0;
   const installments = type === 'parcelado' ? parseInt(document.getElementById('trans-installments').value) || 1 : 1;
   const cardId = payment === 'credito' ? document.getElementById('trans-card').value : '';
+  const isRecurring = type === 'fixo' && document.getElementById('trans-recurring').checked;
 
   if (!date || !description || !category || !type || !value) {
     alert('Preencha todos os campos obrigatórios');
@@ -3253,6 +3292,20 @@ function addTransaction(e) {
         value: value / installments
       });
     }
+  } else if (isRecurring) {
+    const recurringId = baseTransaction.id;
+    for (let i = 0; i < SUBSCRIPTION_HORIZON_MONTHS; i++) {
+      const monthDate = new Date(currentYear, currentMonth + i, 1);
+      const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth()).padStart(2, '0')}`;
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = { transactions: [], subscriptions: [], invoices: [], incomes: [], reserve: [] };
+      }
+      monthlyData[monthKey].transactions.push({
+        ...baseTransaction,
+        id: recurringId + i,
+        recurringId
+      });
+    }
   } else {
     data.transactions.push(baseTransaction);
   }
@@ -3267,6 +3320,20 @@ function addTransaction(e) {
 function deleteTransaction(id) {
   const data = getMonthData();
   data.transactions = data.transactions.filter(t => t.id !== id);
+  saveMonthlyData();
+  updateDashboard();
+}
+
+function stopRecurringTransaction(recurringId) {
+  if (!confirm('Isso remove esta e todas as ocorrências futuras desse gasto fixo recorrente. As ocorrências de meses passados são mantidas no histórico. Continuar?')) return;
+
+  const todayKey = getMonthKeyFor(new Date().getFullYear(), new Date().getMonth());
+  Object.entries(monthlyData).forEach(([key, month]) => {
+    if (key >= todayKey) {
+      month.transactions = (month.transactions || []).filter(t => t.recurringId !== recurringId);
+    }
+  });
+
   saveMonthlyData();
   updateDashboard();
 }
@@ -3289,6 +3356,8 @@ function editTransaction(id) {
   handleTypeChange();
   handlePaymentChange();
   document.getElementById('installment-section').style.display = 'none';
+  document.getElementById('recurring-section').style.display = 'none';
+  document.getElementById('trans-recurring').checked = false;
 
   if (t.payment === 'credito' && t.cardId) {
     document.getElementById('trans-card').value = t.cardId;
