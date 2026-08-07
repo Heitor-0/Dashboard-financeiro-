@@ -346,6 +346,10 @@
     .settings-actions { display: flex; flex-wrap: wrap; gap: 10px; }
     .settings-actions button { flex: 1 1 200px; }
     .settings-danger-zone { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px dashed var(--border-color); }
+    .import-preview-list select { font-size: 12px; padding: 6px 8px; }
+    .import-preview-list td { vertical-align: middle; }
+    tr.import-row-dup { background: var(--warning-soft); }
+    tr.import-row-dup:hover { background: var(--warning-soft); }
     .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 1rem; }
     input, select, textarea {
       padding: 9px 12px;
@@ -750,6 +754,56 @@
         </div>
         <button type="submit" id="trans-submit-btn">Adicionar Movimentação</button>
       </form>
+    </div>
+
+    <div class="card" style="margin-top: 2rem;">
+      <h3>📥 Importar Extrato Bancário</h3>
+      <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 1rem;">Envie um arquivo CSV ou OFX exportado do seu banco. Você poderá revisar, categorizar e escolher quais movimentações importar antes de confirmar — nada é adicionado automaticamente.</p>
+      <button type="button" onclick="document.getElementById('import-file-input').click()">📤 Escolher Arquivo</button>
+      <input type="file" id="import-file-input" accept=".csv,.ofx,.qfx,.txt" style="display: none;" onchange="handleImportFile(event)">
+
+      <div id="import-preview" class="hidden" style="margin-top: 1.5rem;">
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+          <div id="import-summary" style="font-size: 13px; color: var(--text-secondary);"></div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn-small" onclick="toggleAllImportRows(true)">Marcar todas</button>
+            <button type="button" class="btn-small" onclick="toggleAllImportRows(false)">Desmarcar todas</button>
+          </div>
+        </div>
+        <div class="form-grid">
+          <select id="import-payment-default" aria-label="Forma de pagamento para as movimentações importadas">
+            <option value="pix">PIX</option>
+            <option value="debito" selected>Débito</option>
+            <option value="credito">Crédito</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="transferencia">Transferência</option>
+          </select>
+          <select id="import-status-default" aria-label="Status para as movimentações importadas">
+            <option value="pago" selected>Pago</option>
+            <option value="pendente">Pendente</option>
+            <option value="agendado">Agendado</option>
+          </select>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 36px;"></th>
+                <th>Data</th>
+                <th>Descrição</th>
+                <th style="text-align: right;">Valor</th>
+                <th>Categoria</th>
+                <th>Tipo</th>
+              </tr>
+            </thead>
+            <tbody id="import-preview-list"></tbody>
+          </table>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 1rem; flex-wrap: wrap;">
+          <button type="button" onclick="confirmImport()">Confirmar Importação</button>
+          <button type="button" class="btn-danger" onclick="cancelImport()">Cancelar</button>
+        </div>
+      </div>
     </div>
 
     <div class="card" style="margin-top: 2rem;">
@@ -2697,6 +2751,286 @@ function populateCategorySelects() {
   if (subSel) subSel.innerHTML = html;
   if (filterSel) filterSel.innerHTML = '<option value="">Todas as categorias</option>' + html;
   if (installmentSel) installmentSel.innerHTML = '<option value="">Categoria</option>' + html;
+}
+
+// ============================================================
+// IMPORTAÇÃO DE EXTRATO BANCÁRIO (CSV / OFX)
+// ============================================================
+
+let importPreviewRows = [];
+
+function splitCSVLine(line, delimiter) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { current += '"'; i++; }
+        else inQuotes = false;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === delimiter) {
+      result.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result.map(s => s.trim());
+}
+
+function parseImportValue(raw) {
+  if (raw === undefined || raw === null) return NaN;
+  let s = String(raw).trim();
+  if (!s) return NaN;
+  let negative = false;
+  if (/^\(.*\)$/.test(s)) { negative = true; s = s.slice(1, -1); }
+  s = s.replace(/R\$\s?/i, '').replace(/\s/g, '');
+  if (s.startsWith('-')) { negative = true; s = s.slice(1); }
+  if (s.startsWith('+')) s = s.slice(1);
+  if (s.includes(',') && s.includes('.')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (s.includes(',')) {
+    s = s.replace(',', '.');
+  }
+  const num = parseFloat(s);
+  if (isNaN(num)) return NaN;
+  return negative ? -Math.abs(num) : num;
+}
+
+function parseImportDate(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  let m = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+  if (m) {
+    let year = Number(m[3]);
+    year += year < 70 ? 2000 : 1900;
+    return new Date(year, Number(m[2]) - 1, Number(m[1]));
+  }
+  return null;
+}
+
+function parseImportCSV(text) {
+  const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) return [];
+
+  const semicolons = (lines[0].match(/;/g) || []).length;
+  const commas = (lines[0].match(/,/g) || []).length;
+  const delimiter = semicolons >= commas ? ';' : ',';
+
+  const headerCells = splitCSVLine(lines[0], delimiter).map(h => h.toLowerCase());
+  const findCol = patterns => headerCells.findIndex(h => patterns.some(p => h.includes(p)));
+
+  const dateIdx = findCol(['data', 'date', 'dt']);
+  const descIdx = findCol(['descri', 'histor', 'memo', 'title', 'lançamento', 'lancamento']);
+  const valueIdx = findCol(['valor', 'value', 'amount', 'montante']);
+
+  const hasHeader = dateIdx !== -1 && valueIdx !== -1;
+  const startRow = hasHeader ? 1 : 0;
+  const dIdx = hasHeader ? dateIdx : 0;
+  const descI = hasHeader ? (descIdx !== -1 ? descIdx : 1) : 1;
+  const vIdx = hasHeader ? valueIdx : 2;
+
+  const rows = [];
+  for (let i = startRow; i < lines.length; i++) {
+    const cells = splitCSVLine(lines[i], delimiter);
+    if (cells.length < 2) continue;
+    const date = parseImportDate(cells[dIdx]);
+    const value = parseImportValue(cells[vIdx]);
+    const description = (cells[descI] || '').trim() || 'Movimentação importada';
+    if (!date || isNaN(value)) continue;
+    rows.push({ date, description, value });
+  }
+  return rows;
+}
+
+function extractOfxTag(block, tag) {
+  const m = block.match(new RegExp('<' + tag + '>([^<\\r\\n]*)', 'i'));
+  return m ? m[1].trim() : '';
+}
+
+function parseImportOFX(text) {
+  const closed = text.match(/<STMTTRN>[\s\S]*?<\/STMTTRN>/gi);
+  const blocks = closed && closed.length > 0 ? closed : (text.match(/<STMTTRN>[\s\S]*?(?=<STMTTRN>|<\/BANKTRANLIST>)/gi) || []);
+
+  const rows = [];
+  blocks.forEach(block => {
+    const dtRaw = extractOfxTag(block, 'DTPOSTED');
+    const amtRaw = extractOfxTag(block, 'TRNAMT');
+    const memo = extractOfxTag(block, 'MEMO') || extractOfxTag(block, 'NAME') || 'Movimentação importada';
+    const date = parseImportDate(dtRaw);
+    const value = parseImportValue(amtRaw);
+    if (!date || isNaN(value)) return;
+    rows.push({ date, description: memo, value });
+  });
+  return rows;
+}
+
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const text = e.target.result;
+      const isOfx = /\.(ofx|qfx)$/i.test(file.name) || /<OFX>/i.test(text) || /<STMTTRN>/i.test(text);
+      const parsed = isOfx ? parseImportOFX(text) : parseImportCSV(text);
+
+      if (parsed.length === 0) {
+        alert('Não foi possível encontrar movimentações nesse arquivo. Verifique se é um extrato CSV ou OFX válido.');
+        return;
+      }
+
+      buildImportPreview(parsed);
+    } catch (err) {
+      alert('Erro ao ler o arquivo: ' + err.message);
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+  event.target.value = '';
+}
+
+function buildImportPreview(parsedRows) {
+  const defaultCategoryId = globalConfig.categories.some(c => c.id === 'outros')
+    ? 'outros'
+    : (globalConfig.categories[0] ? globalConfig.categories[0].id : '');
+
+  importPreviewRows = parsedRows
+    .sort((a, b) => a.date - b.date)
+    .map((row, i) => {
+      const monthKey = getMonthKeyFor(row.date.getFullYear(), row.date.getMonth());
+      const dateLabel = `${String(row.date.getDate()).padStart(2, '0')}/${String(row.date.getMonth() + 1).padStart(2, '0')}`;
+      const monthData = monthlyData[monthKey];
+      const isDuplicate = !!(monthData && (monthData.transactions || []).some(t =>
+        t.date === dateLabel &&
+        Math.abs(t.value - Math.abs(row.value)) < 0.01 &&
+        t.description.trim().toLowerCase() === row.description.trim().toLowerCase()
+      ));
+
+      return {
+        id: i,
+        monthKey,
+        dateLabel,
+        description: row.description,
+        value: row.value,
+        category: defaultCategoryId,
+        type: row.value >= 0 ? 'receita' : 'variavel',
+        selected: !isDuplicate,
+        duplicate: isDuplicate
+      };
+    });
+
+  renderImportPreview();
+}
+
+function categoryOptionsHtml(selectedId) {
+  return globalConfig.categories.map(c => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${c.emoji} ${c.name}</option>`).join('');
+}
+
+function renderImportPreview() {
+  const wrap = document.getElementById('import-preview');
+  const list = document.getElementById('import-preview-list');
+  const summary = document.getElementById('import-summary');
+
+  if (importPreviewRows.length === 0) {
+    wrap.classList.add('hidden');
+    return;
+  }
+  wrap.classList.remove('hidden');
+
+  const selectedCount = importPreviewRows.filter(r => r.selected).length;
+  const dupCount = importPreviewRows.filter(r => r.duplicate).length;
+  summary.textContent = `${importPreviewRows.length} movimentações encontradas · ${selectedCount} selecionada(s)` +
+    (dupCount > 0 ? ` · ${dupCount} possível(is) duplicata(s) (desmarcadas por padrão)` : '');
+
+  list.innerHTML = importPreviewRows.map(row => `
+    <tr class="${row.duplicate ? 'import-row-dup' : ''}">
+      <td><input type="checkbox" ${row.selected ? 'checked' : ''} onchange="toggleImportRow(${row.id})" aria-label="Incluir esta movimentação na importação"></td>
+      <td>${row.dateLabel}${row.duplicate ? '<br><span class="badge badge-warning">Duplicata?</span>' : ''}</td>
+      <td>${row.description}</td>
+      <td style="text-align: right; font-weight: 600; color: ${row.value < 0 ? 'var(--danger)' : 'var(--success)'};">${row.value < 0 ? '-' : '+'} R$ ${formatValue(Math.abs(row.value))}</td>
+      <td><select onchange="updateImportRowField(${row.id}, 'category', this.value)" aria-label="Categoria">${categoryOptionsHtml(row.category)}</select></td>
+      <td>
+        <select onchange="updateImportRowField(${row.id}, 'type', this.value)" aria-label="Tipo">
+          <option value="fixo" ${row.type === 'fixo' ? 'selected' : ''}>Fixo</option>
+          <option value="variavel" ${row.type === 'variavel' ? 'selected' : ''}>Variável</option>
+          <option value="receita" ${row.type === 'receita' ? 'selected' : ''}>Receita</option>
+        </select>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function toggleImportRow(id) {
+  const row = importPreviewRows.find(r => r.id === id);
+  if (row) row.selected = !row.selected;
+  renderImportPreview();
+}
+
+function toggleAllImportRows(state) {
+  importPreviewRows.forEach(r => { r.selected = state; });
+  renderImportPreview();
+}
+
+function updateImportRowField(id, field, value) {
+  const row = importPreviewRows.find(r => r.id === id);
+  if (row) row[field] = value;
+}
+
+function confirmImport() {
+  const selectedRows = importPreviewRows.filter(r => r.selected);
+  if (selectedRows.length === 0) {
+    alert('Selecione ao menos uma movimentação para importar.');
+    return;
+  }
+
+  const payment = document.getElementById('import-payment-default').value;
+  const status = document.getElementById('import-status-default').value;
+  let idCounter = Date.now();
+
+  selectedRows.forEach(row => {
+    if (!monthlyData[row.monthKey]) {
+      monthlyData[row.monthKey] = { transactions: [], invoices: [], incomes: [], reserve: [] };
+    }
+    monthlyData[row.monthKey].transactions.push({
+      id: idCounter++,
+      date: row.dateLabel,
+      description: row.description,
+      category: row.category,
+      type: row.type,
+      payment,
+      cardId: null,
+      status,
+      value: Math.abs(row.value),
+      installments: 1,
+      source: 'import'
+    });
+  });
+
+  saveMonthlyData();
+  const count = selectedRows.length;
+  cancelImport();
+  updateDashboard();
+  alert(`✅ ${count} movimentação(ões) importada(s) com sucesso!`);
+}
+
+function cancelImport() {
+  importPreviewRows = [];
+  document.getElementById('import-preview').classList.add('hidden');
+  document.getElementById('import-preview-list').innerHTML = '';
 }
 
 // ============================================================
