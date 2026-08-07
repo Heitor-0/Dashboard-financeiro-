@@ -18,13 +18,16 @@
       color-scheme: light dark;
       --primary: #8B5CF6;
       --primary-dark: #7C3AED;
+      --primary-light: #A78BFA;
       --primary-soft: rgba(139, 92, 246, 0.12);
+      --accent: #EC4899;
+      --accent-soft: rgba(236, 72, 153, 0.14);
       --success: #10B981;
       --success-soft: rgba(16, 185, 129, 0.12);
       --warning: #F59E0B;
       --warning-soft: rgba(245, 158, 11, 0.12);
       --danger: #E84C3D;
-      --bg-main: #F8FAFC;
+      --bg-main: #F5F3FF;
       --bg-card: #FFFFFF;
       --bg-subtle: #F1F5F9;
       --danger-soft: #FFE4E6;
@@ -35,44 +38,54 @@
       --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
       --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.06);
       --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.10);
+      --glow-primary: 0 8px 24px rgba(139, 92, 246, 0.28);
+      --glow-primary-lg: 0 16px 40px rgba(139, 92, 246, 0.35);
+      --gradient-primary: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);
+      --gradient-hero: linear-gradient(135deg, #8B5CF6 0%, #C026D3 55%, #EC4899 100%);
+      --gradient-success: linear-gradient(135deg, #10B981 0%, #059669 100%);
       --radius-sm: 8px;
       --radius-md: 12px;
       --radius-lg: 16px;
       --ease: cubic-bezier(0.4, 0, 0.2, 1);
+      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg-main: #0F172A;
-        --bg-card: #1E293B;
-        --bg-subtle: #263140;
+        --bg-main: #0A0A12;
+        --bg-card: #16151F;
+        --bg-subtle: #1E1D2B;
         --danger-soft: rgba(232, 76, 61, 0.18);
-        --border-color: #334155;
+        --border-color: #2C2A3D;
         --text-primary: #F1F5F9;
-        --text-secondary: #94A3B8;
-        --text-muted: #64748B;
-        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-        --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.28);
-        --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.4);
+        --text-secondary: #9CA3AF;
+        --text-muted: #6B7280;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+        --glow-primary: 0 8px 24px rgba(139, 92, 246, 0.4);
+        --glow-primary-lg: 0 16px 44px rgba(139, 92, 246, 0.45);
       }
     }
 
     :root[data-theme="dark"] {
-      --bg-main: #0F172A;
-      --bg-card: #1E293B;
-      --bg-subtle: #263140;
+      --bg-main: #0A0A12;
+      --bg-card: #16151F;
+      --bg-subtle: #1E1D2B;
       --danger-soft: rgba(232, 76, 61, 0.18);
-      --border-color: #334155;
+      --border-color: #2C2A3D;
       --text-primary: #F1F5F9;
-      --text-secondary: #94A3B8;
-      --text-muted: #64748B;
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.28);
-      --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.4);
+      --text-secondary: #9CA3AF;
+      --text-muted: #6B7280;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+      --glow-primary: 0 8px 24px rgba(139, 92, 246, 0.4);
+      --glow-primary-lg: 0 16px 44px rgba(139, 92, 246, 0.45);
     }
 
     :root[data-theme="light"] {
-      --bg-main: #F8FAFC;
+      --bg-main: #F5F3FF;
       --bg-card: #FFFFFF;
       --bg-subtle: #F1F5F9;
       --danger-soft: #FFE4E6;
@@ -83,6 +96,8 @@
       --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
       --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.06);
       --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.10);
+      --glow-primary: 0 8px 24px rgba(139, 92, 246, 0.28);
+      --glow-primary-lg: 0 16px 40px rgba(139, 92, 246, 0.35);
     }
 
     html { -webkit-tap-highlight-color: transparent; }
@@ -146,7 +161,23 @@
       display: flex;
       gap: 1.75rem;
       flex-wrap: wrap;
+      position: relative;
     }
+    .nav-indicator {
+      position: absolute;
+      bottom: 0;
+      height: 2.5px;
+      background: var(--gradient-primary);
+      border-radius: 2px;
+      box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
+      transition: transform 0.35s var(--ease-spring), width 0.35s var(--ease-spring), opacity 0.2s var(--ease);
+      pointer-events: none;
+      opacity: 0;
+      left: 0;
+      width: 0;
+      will-change: transform, width;
+    }
+    .nav-indicator.ready { opacity: 1; }
     .nav-btn {
       display: inline-flex;
       align-items: center;
@@ -167,7 +198,6 @@
     .nav-btn.active, .nav-btn.active:hover, .nav-btn.active:focus {
       background: transparent;
       color: var(--primary);
-      border-bottom-color: var(--primary);
     }
     .nav-hamburger {
       display: none;
@@ -194,6 +224,7 @@
     }
     .nav-overlay.open { display: block; opacity: 1; }
     @media (max-width: 768px) {
+      .nav-indicator { display: none; }
       .navbar { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-card); }
       .navbar-content { padding: 0 1rem; }
       .nav-title { min-width: 0; font-size: 15px; flex: 1; }
@@ -262,6 +293,22 @@
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    @keyframes popIn {
+      from { opacity: 0; transform: translateY(10px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes rowFadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .grid-2 .kpi-card, .grid-3 .kpi-card, .grid-4 .kpi-card {
+      animation: popIn 0.4s var(--ease-spring) backwards;
+    }
+    .grid-2 .kpi-card:nth-child(1), .grid-3 .kpi-card:nth-child(1), .grid-4 .kpi-card:nth-child(1) { animation-delay: 0.02s; }
+    .grid-2 .kpi-card:nth-child(2), .grid-3 .kpi-card:nth-child(2), .grid-4 .kpi-card:nth-child(2) { animation-delay: 0.07s; }
+    .grid-2 .kpi-card:nth-child(3), .grid-3 .kpi-card:nth-child(3), .grid-4 .kpi-card:nth-child(3) { animation-delay: 0.12s; }
+    .grid-2 .kpi-card:nth-child(4), .grid-3 .kpi-card:nth-child(4), .grid-4 .kpi-card:nth-child(4) { animation-delay: 0.17s; }
+    tbody tr { animation: rowFadeIn 0.22s var(--ease) backwards; }
     .header {
       margin-bottom: 2rem;
     }
@@ -287,15 +334,37 @@
       padding: 1.5rem;
       border-left: 3px solid var(--primary);
       box-shadow: var(--shadow-sm);
-      transition: box-shadow 0.2s var(--ease), transform 0.2s var(--ease);
+      transition: box-shadow 0.25s var(--ease), transform 0.25s var(--ease-spring);
+      position: relative;
+      overflow: hidden;
     }
-    .kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+    .kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
     .kpi-card.success { border-left-color: var(--success); }
     .kpi-card.warning { border-left-color: var(--warning); }
     .kpi-card.danger { border-left-color: var(--danger); }
     .kpi-label { font-size: 11.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 8px; }
     .kpi-value { font-size: 25px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
     .kpi-delta { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+    .kpi-card.hero {
+      background: var(--gradient-hero);
+      border-left: none;
+      box-shadow: var(--glow-primary);
+      color: white;
+    }
+    .kpi-card.hero::after {
+      content: '';
+      position: absolute;
+      top: -40%;
+      right: -20%;
+      width: 70%;
+      height: 180%;
+      background: radial-gradient(circle, rgba(255,255,255,0.16) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .kpi-card.hero:hover { box-shadow: var(--glow-primary-lg); transform: translateY(-2px); }
+    .kpi-card.hero .kpi-label { color: rgba(255,255,255,0.85); }
+    .kpi-card.hero .kpi-value { color: white; }
+    .kpi-card.hero .kpi-delta { color: rgba(255,255,255,0.75); }
     .progress-bar { width: 100%; height: 7px; background: var(--bg-subtle); border-radius: 4px; overflow: hidden; margin: 8px 0; }
     .progress-fill { height: 100%; border-radius: 4px; transition: width 0.4s var(--ease), background 0.3s var(--ease); }
     .progress-fill.green { background: var(--success); }
@@ -369,7 +438,7 @@
       box-shadow: 0 0 0 3px var(--primary-soft);
     }
     button {
-      background: var(--primary);
+      background: var(--gradient-primary);
       color: white;
       border: none;
       padding: 10px 20px;
@@ -377,11 +446,13 @@
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.15s var(--ease), transform 0.1s var(--ease), box-shadow 0.15s var(--ease);
+      transition: box-shadow 0.2s var(--ease), transform 0.15s var(--ease-spring), filter 0.15s var(--ease);
       box-shadow: var(--shadow-sm);
+      background-size: 140% 140%;
+      background-position: 0% 0%;
     }
-    button:hover { background: var(--primary-dark); box-shadow: var(--shadow-md); }
-    button:active { transform: translateY(1px) scale(0.99); }
+    button:hover { box-shadow: var(--glow-primary); transform: translateY(-1px); filter: brightness(1.06); }
+    button:active { transform: translateY(1px) scale(0.97); box-shadow: var(--shadow-sm); }
     button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
     .btn-small { padding: 6px 12px; font-size: 12px; }
     .btn-danger { background: var(--danger); }
@@ -484,6 +555,7 @@
       margin-bottom: 1rem;
       font-size: 13px;
       color: var(--text-primary);
+      animation: popIn 0.3s var(--ease-spring);
     }
     .edit-banner.hidden { display: none; }
     .edit-banner strong { color: var(--primary); }
@@ -558,6 +630,7 @@
         <button class="nav-btn" onclick="switchTab('assinaturas')"><span class="nav-icon">🔁</span><span class="nav-label">Assinaturas</span></button>
         <button class="nav-btn" onclick="switchTab('relatorios')"><span class="nav-icon">📊</span><span class="nav-label">Relatórios</span></button>
         <button class="nav-btn" onclick="switchTab('configuracoes')"><span class="nav-icon">⚙️</span><span class="nav-label">Config</span></button>
+        <div class="nav-indicator" id="nav-indicator"></div>
       </div>
     </div>
   </div>
@@ -576,7 +649,7 @@
         <div class="kpi-value" id="total-income">R$ 0,00</div>
         <div class="kpi-delta">+0% vs. mês anterior</div>
       </div>
-      <div class="kpi-card success">
+      <div class="kpi-card hero">
         <div class="kpi-label">Disponível para Gastar</div>
         <div class="kpi-value" id="disposable">R$ 0,00</div>
         <div class="kpi-delta">0% do mês já passou</div>
@@ -1275,6 +1348,7 @@ function initApp() {
   document.getElementById('year-select').value = currentYear;
   ['income-date', 'trans-date', 'reserve-date', 'sub-next-charge', 'installment-date'].forEach(attachDateMask);
   updateDashboard();
+  requestAnimationFrame(updateNavIndicator);
 }
 
 function attachDateMask(id) {
@@ -1475,6 +1549,7 @@ function switchTab(tab) {
 
   document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
   event.currentTarget.classList.add('active');
+  updateNavIndicator();
 
   document.getElementById('nav-links').classList.remove('open');
   document.getElementById('nav-overlay').classList.remove('open');
@@ -1492,6 +1567,22 @@ function switchTab(tab) {
   if (tab === 'movimentacoes') renderTransactions();
   if (tab === 'reserva') renderReserve();
   if (tab === 'dashboard') updateDashboard();
+}
+
+function updateNavIndicator() {
+  const nav = document.getElementById('nav-links');
+  const indicator = document.getElementById('nav-indicator');
+  const active = nav.querySelector('.nav-btn.active');
+  if (!nav || !indicator || !active) return;
+  if (window.innerWidth <= 768) {
+    indicator.classList.remove('ready');
+    return;
+  }
+  const navRect = nav.getBoundingClientRect();
+  const btnRect = active.getBoundingClientRect();
+  indicator.style.width = btnRect.width + 'px';
+  indicator.style.transform = `translateX(${btnRect.left - navRect.left}px)`;
+  indicator.classList.add('ready');
 }
 
 function updateDashboard() {
@@ -1582,6 +1673,35 @@ function getStatusColor(spent, limit) {
   return 'green';
 }
 
+const kpiAnimTokens = new WeakMap();
+
+function animateKpiValue(el, newValue) {
+  if (!el) return;
+  const prevRaw = parseFloat(el.dataset.rawValue || '0') || 0;
+  if (Math.abs(prevRaw - newValue) < 0.005) {
+    el.textContent = formatCurrency(newValue);
+    el.dataset.rawValue = String(newValue);
+    return;
+  }
+  const token = Symbol();
+  kpiAnimTokens.set(el, token);
+  const duration = 550;
+  const start = performance.now();
+  function tick(now) {
+    if (kpiAnimTokens.get(el) !== token) return;
+    const t = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = formatCurrency(prevRaw + (newValue - prevRaw) * eased);
+    if (t < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      el.textContent = formatCurrency(newValue);
+      el.dataset.rawValue = String(newValue);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
 function updateKPIs() {
   const income = calculateTotalIncome();
   const spent = calculateTotalSpent();
@@ -1591,10 +1711,10 @@ function updateKPIs() {
   const reservedThisMonth = calculateMonthReserve();
   const disposable = income - spent - reservedThisMonth;
 
-  document.getElementById('total-income').textContent = formatCurrency(income);
-  document.getElementById('total-spent').textContent = formatCurrency(spent);
-  document.getElementById('disposable').textContent = formatCurrency(Math.max(0, disposable));
-  document.getElementById('reserved').textContent = formatCurrency(reservedTotal);
+  animateKpiValue(document.getElementById('total-income'), income);
+  animateKpiValue(document.getElementById('total-spent'), spent);
+  animateKpiValue(document.getElementById('disposable'), Math.max(0, disposable));
+  animateKpiValue(document.getElementById('reserved'), reservedTotal);
 
   const reserveGoal = globalConfig.reserveGoal || 0;
   const reservePct = reserveGoal > 0 ? Math.round((reservedTotal / reserveGoal) * 100) : 0;
@@ -3689,6 +3809,7 @@ window.addEventListener('resize', () => {
   if (!document.getElementById('relatorios-tab').classList.contains('hidden')) {
     renderReports();
   }
+  updateNavIndicator();
 });
 window.addEventListener('orientationchange', () => {
   setTimeout(() => {
@@ -3698,6 +3819,7 @@ window.addEventListener('orientationchange', () => {
     if (!document.getElementById('relatorios-tab').classList.contains('hidden')) {
       renderReports();
     }
+    updateNavIndicator();
   }, 150);
 });
 </script>
