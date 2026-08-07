@@ -311,6 +311,41 @@
     .category-item:hover { box-shadow: var(--shadow-sm); border-color: var(--primary); border-color: color-mix(in srgb, var(--primary) 20%, var(--border-color)); }
     .category-header { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
     .category-stat { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+    .category-config-list { display: flex; flex-direction: column; gap: 8px; }
+    .category-config-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      background: var(--bg-main);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      transition: border-color 0.15s var(--ease);
+    }
+    .category-config-row:focus-within { border-color: var(--primary); }
+    .category-config-row .cat-emoji-input {
+      flex: 0 0 40px;
+      width: 40px;
+      min-width: 0;
+      padding: 8px 4px;
+      text-align: center;
+    }
+    .category-config-row .cat-name-input { flex: 1 1 auto; min-width: 0; }
+    .category-config-row .cat-limit-input { flex: 0 0 76px; width: 76px; min-width: 0; padding: 8px 6px; }
+    .category-row-delete {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .settings-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .settings-actions button { flex: 1 1 200px; }
+    .settings-danger-zone { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px dashed var(--border-color); }
     .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 1rem; }
     input, select, textarea {
       padding: 9px 12px;
@@ -971,24 +1006,26 @@
 
     <div class="card" style="margin-top: 1rem;">
       <h3>Categorias</h3>
-      <div id="config-categories"></div>
+      <div id="config-categories" class="category-config-list"></div>
       <div class="form-grid" style="margin-top: 1rem;">
-        <input type="text" id="new-cat-emoji" placeholder="Emoji" maxlength="2">
-        <input type="text" id="new-cat-name" placeholder="Nome">
-        <input type="number" id="new-cat-limit" placeholder="Limite" step="0.01">
+        <input type="text" id="new-cat-emoji" placeholder="Emoji" maxlength="2" aria-label="Emoji da nova categoria">
+        <input type="text" id="new-cat-name" placeholder="Nome" aria-label="Nome da nova categoria">
+        <input type="number" id="new-cat-limit" placeholder="Limite" step="0.01" aria-label="Limite mensal da nova categoria">
       </div>
       <button onclick="addCategory()">Adicionar Categoria</button>
     </div>
 
     <div class="card" style="margin-top: 1rem;">
       <h3>Dados</h3>
-      <div style="margin-bottom: 1rem;">
-        <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 1rem;">💡 Exporte seus dados antes de trocar de máquina ou fazer backup. Importe na outra máquina para restaurar tudo!</p>
-        <button onclick="exportData()" style="margin-right: 8px;">📥 Exportar Dados</button>
-        <button onclick="document.getElementById('file-import').click()" style="margin-right: 8px; background: var(--success);">📤 Importar Dados</button>
+      <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 1rem;">💡 Exporte seus dados antes de trocar de máquina ou fazer backup. Importe na outra máquina para restaurar tudo!</p>
+      <div class="settings-actions">
+        <button onclick="exportData()">📥 Exportar Dados</button>
+        <button onclick="document.getElementById('file-import').click()" class="btn-success">📤 Importar Dados</button>
         <input type="file" id="file-import" accept=".json" style="display: none;" onchange="importData(event)">
       </div>
-      <button onclick="clearAllData()" class="btn-danger">🗑️ Limpar Tudo</button>
+      <div class="settings-danger-zone">
+        <button onclick="clearAllData()" class="btn-danger" style="width: 100%;">🗑️ Limpar Tudo</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2532,15 +2569,15 @@ function renderInsights() {
 function renderConfigCategories() {
   const html = globalConfig.categories
     .map(c => `
-      <div style="display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: 8px; margin-bottom: 8px; align-items: center;">
-        <input type="text" value="${c.emoji}" onchange="updateCategoryEmoji('${c.id}', this.value)" maxlength="2" style="max-width: 50px;">
-        <input type="text" value="${c.name}" onchange="updateCategoryName('${c.id}', this.value)">
-        <input type="number" value="${c.limit}" onchange="updateCategoryLimit('${c.id}', this.value)" step="0.01">
-        <button class="delete-btn btn-small" onclick="deleteCategory('${c.id}')">Remover</button>
+      <div class="category-config-row">
+        <input type="text" class="cat-emoji-input" value="${c.emoji}" onchange="updateCategoryEmoji('${c.id}', this.value)" maxlength="2" aria-label="Emoji de ${c.name}">
+        <input type="text" class="cat-name-input" value="${c.name}" onchange="updateCategoryName('${c.id}', this.value)" aria-label="Nome da categoria">
+        <input type="number" class="cat-limit-input" value="${c.limit}" onchange="updateCategoryLimit('${c.id}', this.value)" step="0.01" aria-label="Limite mensal de ${c.name}">
+        <button class="delete-btn category-row-delete" onclick="deleteCategory('${c.id}')" title="Remover ${c.name}" aria-label="Remover ${c.name}">🗑️</button>
       </div>
     `)
     .join('');
-  
+
   document.getElementById('config-categories').innerHTML = html;
 }
 
@@ -2834,6 +2871,7 @@ function addCategory() {
   });
   
   saveGlobalConfig();
+  renderConfigCategories();
   document.getElementById('new-cat-emoji').value = '';
   document.getElementById('new-cat-name').value = '';
   document.getElementById('new-cat-limit').value = '';
@@ -2846,6 +2884,7 @@ function deleteCategory(id) {
   }
   globalConfig.categories = globalConfig.categories.filter(c => c.id !== id);
   saveGlobalConfig();
+  renderConfigCategories();
 }
 
 function updateCategoryEmoji(id, emoji) {
