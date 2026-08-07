@@ -1136,7 +1136,9 @@ const DEFAULT_CATEGORIES = [
   { id: 'moradia', emoji: '🏠', name: 'Moradia', limit: 0 },
   { id: 'mercado', emoji: '🥦', name: 'Mercado', limit: 0 },
   { id: 'alimentacao', emoji: '🍔', name: 'Alimentação', limit: 0 },
+  { id: 'delivery', emoji: '🛵', name: 'Delivery', limit: 0 },
   { id: 'combustivel', emoji: '⛽', name: 'Combustível', limit: 0 },
+  { id: 'uber99', emoji: '🚕', name: 'Uber/99', limit: 0 },
   { id: 'lazer', emoji: '🎮', name: 'Lazer', limit: 0 },
   { id: 'saude', emoji: '⚕️', name: 'Saúde', limit: 0 },
   { id: 'farmacia', emoji: '💊', name: 'Farmácia', limit: 0 },
@@ -1149,7 +1151,9 @@ const DEFAULT_CATEGORIES = [
 
 const ADDED_DEFAULT_CATEGORIES = [
   { id: 'farmacia', emoji: '💊', name: 'Farmácia', limit: 0 },
-  { id: 'pix', emoji: '💸', name: 'PIX', limit: 0 }
+  { id: 'pix', emoji: '💸', name: 'PIX', limit: 0 },
+  { id: 'delivery', emoji: '🛵', name: 'Delivery', limit: 0 },
+  { id: 'uber99', emoji: '🚕', name: 'Uber/99', limit: 0 }
 ];
 
 let globalConfig = {
@@ -1162,8 +1166,7 @@ let globalConfig = {
   reserveBoxes: [],
   subscriptions: [],
   goalsMigrated: false,
-  subscriptionsMigrated: false,
-  addedCategoriesMigrated: false
+  subscriptionsMigrated: false
 };
 
 let monthlyData = {};
@@ -1345,19 +1348,22 @@ function loadGlobalConfig() {
 }
 
 function migrateAddedCategories() {
-  if (globalConfig.addedCategoriesMigrated) return;
-
   const existingIds = new Set(globalConfig.categories.map(c => c.id));
   const existingNames = new Set(globalConfig.categories.map(c => c.name.trim().toLowerCase()));
+  let changed = false;
 
   ADDED_DEFAULT_CATEGORIES.forEach(cat => {
     if (!existingIds.has(cat.id) && !existingNames.has(cat.name.trim().toLowerCase())) {
       globalConfig.categories.push({ ...cat });
+      existingIds.add(cat.id);
+      existingNames.add(cat.name.trim().toLowerCase());
+      changed = true;
     }
   });
 
-  globalConfig.addedCategoriesMigrated = true;
-  localStorage.setItem('financeGlobalConfig', JSON.stringify(globalConfig));
+  if (changed) {
+    localStorage.setItem('financeGlobalConfig', JSON.stringify(globalConfig));
+  }
 }
 
 function migrateGoalsToBoxes() {
