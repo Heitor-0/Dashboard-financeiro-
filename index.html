@@ -446,6 +446,40 @@
       border-color: var(--danger);
       color: var(--danger);
     }
+    .edit-btn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
+    }
+    .edit-btn:hover {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .row-actions { display: inline-flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+    tbody tr.row-editing { background: var(--primary-soft); }
+    tbody tr.row-editing:hover { background: var(--primary-soft); }
+    .edit-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      background: var(--primary-soft);
+      border: 1px solid var(--primary);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      margin-bottom: 1rem;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+    .edit-banner.hidden { display: none; }
+    .edit-banner strong { color: var(--primary); }
     .theme-switch { position: relative; display: inline-block; width: 48px; height: 26px; flex-shrink: 0; }
     .theme-switch input { opacity: 0; width: 0; height: 0; }
     .theme-switch-slider {
@@ -674,7 +708,11 @@
     <h2 style="font-size: 22px; font-weight: 500; margin-bottom: 2rem;">Adicionar Movimentação</h2>
 
     <div class="card">
-      <form onsubmit="addTransaction(event)">
+      <div id="trans-edit-banner" class="edit-banner hidden">
+        <span>✏️ Editando movimentação: <strong id="trans-edit-label"></strong></span>
+        <button type="button" class="btn-small" onclick="cancelEditTransaction()">Cancelar</button>
+      </div>
+      <form id="trans-form" onsubmit="addTransaction(event)">
         <div class="form-grid">
           <input type="text" id="trans-date" placeholder="Data (DD/MM)" required>
           <input type="text" id="trans-desc" placeholder="Descrição" required>
@@ -710,7 +748,7 @@
             </select>
           </div>
         </div>
-        <button type="submit">Adicionar Movimentação</button>
+        <button type="submit" id="trans-submit-btn">Adicionar Movimentação</button>
       </form>
     </div>
 
@@ -802,6 +840,10 @@
 
     <div class="card" style="margin-top: 1.5rem;">
       <h3>Registrar Movimentação da Reserva</h3>
+      <div id="reserve-edit-banner" class="edit-banner hidden">
+        <span>✏️ Editando movimentação: <strong id="reserve-edit-label"></strong></span>
+        <button type="button" class="btn-small" onclick="cancelEditReserveMovement()">Cancelar</button>
+      </div>
       <form id="reserve-form" onsubmit="addReserveMovement(event)">
         <div class="form-grid">
           <input type="text" id="reserve-date" placeholder="Data (DD/MM)" required>
@@ -815,7 +857,7 @@
           <input type="text" id="reserve-description" placeholder="Descrição (opcional)">
           <input type="number" id="reserve-value" placeholder="Valor" step="0.01" required>
         </div>
-        <button type="submit">Registrar</button>
+        <button type="submit" id="reserve-submit-btn">Registrar</button>
       </form>
     </div>
 
@@ -1065,6 +1107,8 @@ let globalConfig = {
 let monthlyData = {};
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
+let editingTransactionId = null;
+let editingReserveId = null;
 
 // ============================================================
 // TOOLTIPS INTERATIVOS DOS GRÁFICOS
@@ -1315,6 +1359,8 @@ function loadConfigInputs() {
 // ============================================================
 
 function changeMonth() {
+  if (editingTransactionId !== null) cancelEditTransaction();
+  if (editingReserveId !== null) cancelEditReserveMovement();
   currentMonth = parseInt(document.getElementById('month-select').value);
   currentYear = parseInt(document.getElementById('year-select').value);
   updateDashboard();
@@ -1846,11 +1892,29 @@ function addReserveMovement(e) {
     return;
   }
 
+  const existingRecord = editingReserveId !== null ? (data.reserve || []).find(m => m.id === editingReserveId) : null;
+
   if (type === 'retirada') {
-    const available = boxId ? calculateBoxTotal(boxId) : calculateReserveGeneralTotal();
+    const boxTotal = boxId ? calculateBoxTotal(boxId) : calculateReserveGeneralTotal();
+    const sameTarget = existingRecord && (existingRecord.boxId || null) === boxId;
+    const currentContribution = sameTarget ? (existingRecord.type === 'aporte' ? existingRecord.value : -existingRecord.value) : 0;
+    const available = boxTotal - currentContribution;
     if (value > available) {
       if (!confirm('A retirada é maior que o saldo disponível nesse destino. Deseja continuar mesmo assim?')) return;
     }
+  }
+
+  if (existingRecord) {
+    existingRecord.date = date;
+    existingRecord.type = type;
+    existingRecord.boxId = boxId;
+    existingRecord.description = description;
+    existingRecord.value = value;
+    saveMonthlyData();
+    e.target.reset();
+    cancelEditReserveMovement();
+    updateDashboard();
+    return;
   }
 
   if (!data.reserve) data.reserve = [];
@@ -1868,6 +1932,36 @@ function deleteReserveMovement(id) {
   saveMonthlyData();
   renderReserve();
   updateDashboard();
+}
+
+function editReserveMovement(id) {
+  const data = getMonthData();
+  const m = (data.reserve || []).find(mv => mv.id === id);
+  if (!m) return;
+
+  editingReserveId = id;
+
+  document.getElementById('reserve-date').value = m.date;
+  document.getElementById('reserve-type').value = m.type;
+  document.getElementById('reserve-box').value = m.boxId || '';
+  document.getElementById('reserve-description').value = m.description || '';
+  document.getElementById('reserve-value').value = m.value;
+
+  document.getElementById('reserve-edit-label').textContent = m.description || (m.type === 'aporte' ? 'Aporte' : 'Retirada');
+  document.getElementById('reserve-edit-banner').classList.remove('hidden');
+  document.getElementById('reserve-submit-btn').textContent = 'Salvar Alterações';
+
+  renderReserve();
+  document.getElementById('reserve-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelEditReserveMovement() {
+  const wasEditing = editingReserveId !== null;
+  editingReserveId = null;
+  document.getElementById('reserve-form').reset();
+  document.getElementById('reserve-edit-banner').classList.add('hidden');
+  document.getElementById('reserve-submit-btn').textContent = 'Registrar';
+  if (wasEditing) renderReserve();
 }
 
 function renderReserve() {
@@ -1905,13 +1999,18 @@ function renderReserve() {
   list.innerHTML = movements.map(m => {
     const box = m.boxId ? globalConfig.reserveBoxes.find(b => b.id === m.boxId) : null;
     return `
-      <tr>
+      <tr class="${m.id === editingReserveId ? 'row-editing' : ''}">
         <td>${m.date}</td>
         <td>${m.description || '-'}</td>
         <td>${box ? '🐷 ' + box.name : 'Geral'}</td>
         <td><span class="badge ${m.type === 'aporte' ? 'badge-success' : 'badge-warning'}">${m.type === 'aporte' ? 'Aporte' : 'Retirada'}</span></td>
         <td style="text-align: right; font-weight: 600; color: ${m.type === 'aporte' ? 'var(--success)' : 'var(--danger)'};">${m.type === 'aporte' ? '+' : '-'} R$ ${formatValue(m.value)}</td>
-        <td style="text-align: center;"><button class="delete-btn" onclick="deleteReserveMovement(${m.id})">Remover</button></td>
+        <td style="text-align: center;">
+          <div class="row-actions">
+            <button class="edit-btn" onclick="editReserveMovement(${m.id})">Editar</button>
+            <button class="delete-btn" onclick="deleteReserveMovement(${m.id})">Remover</button>
+          </div>
+        </td>
       </tr>
     `;
   }).join('');
@@ -2230,7 +2329,7 @@ function renderTransactions() {
     const paymentLabel = card ? `Crédito (${card.name})` : t.payment;
 
     const html = `
-      <tr>
+      <tr class="${t.id === editingTransactionId ? 'row-editing' : ''}">
         <td>${t.date}</td>
         <td>${t.description}</td>
         <td>${cat ? cat.emoji + ' ' + cat.name : 'N/A'}</td>
@@ -2238,7 +2337,12 @@ function renderTransactions() {
         <td>${paymentLabel}</td>
         <td><span class="badge badge-${statusBadge}">${t.status}</span></td>
         <td style="text-align: right; font-weight: 600;">R$ ${formatValue(t.value)}</td>
-        <td style="text-align: center;"><button class="delete-btn" onclick="deleteTransaction(${t.id})">Remover</button></td>
+        <td style="text-align: center;">
+          <div class="row-actions">
+            <button class="edit-btn" onclick="editTransaction(${t.id})">Editar</button>
+            <button class="delete-btn" onclick="deleteTransaction(${t.id})">Remover</button>
+          </div>
+        </td>
       </tr>
     `;
     list.innerHTML += html;
@@ -2646,6 +2750,25 @@ function addTransaction(e) {
     return;
   }
 
+  if (editingTransactionId !== null) {
+    const existing = data.transactions.find(t => t.id === editingTransactionId);
+    if (existing) {
+      existing.date = date;
+      existing.description = description;
+      existing.category = category;
+      existing.type = type;
+      existing.payment = payment;
+      existing.status = status;
+      existing.value = value;
+      existing.cardId = cardId ? Number(cardId) : null;
+    }
+    saveMonthlyData();
+    e.target.reset();
+    cancelEditTransaction();
+    updateDashboard();
+    return;
+  }
+
   const baseTransaction = {
     id: Date.now(),
     date,
@@ -2691,6 +2814,53 @@ function deleteTransaction(id) {
   data.transactions = data.transactions.filter(t => t.id !== id);
   saveMonthlyData();
   updateDashboard();
+}
+
+function editTransaction(id) {
+  const data = getMonthData();
+  const t = data.transactions.find(tr => tr.id === id);
+  if (!t) return;
+
+  editingTransactionId = id;
+
+  document.getElementById('trans-date').value = t.date;
+  document.getElementById('trans-desc').value = t.description;
+  document.getElementById('trans-category').value = t.category;
+  document.getElementById('trans-type').value = t.type;
+  document.getElementById('trans-payment').value = t.payment;
+  document.getElementById('trans-status').value = t.status;
+  document.getElementById('trans-value').value = t.value;
+
+  handleTypeChange();
+  handlePaymentChange();
+  document.getElementById('installment-section').style.display = 'none';
+
+  if (t.payment === 'credito' && t.cardId) {
+    document.getElementById('trans-card').value = t.cardId;
+  }
+
+  const parceladoOption = document.querySelector('#trans-type option[value="parcelado"]');
+  if (parceladoOption) parceladoOption.disabled = true;
+
+  document.getElementById('trans-edit-label').textContent = t.description;
+  document.getElementById('trans-edit-banner').classList.remove('hidden');
+  document.getElementById('trans-submit-btn').textContent = 'Salvar Alterações';
+
+  renderTransactions();
+  document.getElementById('trans-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelEditTransaction() {
+  const wasEditing = editingTransactionId !== null;
+  editingTransactionId = null;
+  document.getElementById('trans-form').reset();
+  handleTypeChange();
+  handlePaymentChange();
+  const parceladoOption = document.querySelector('#trans-type option[value="parcelado"]');
+  if (parceladoOption) parceladoOption.disabled = false;
+  document.getElementById('trans-edit-banner').classList.add('hidden');
+  document.getElementById('trans-submit-btn').textContent = 'Adicionar Movimentação';
+  if (wasEditing) renderTransactions();
 }
 
 function addIncome(e) {
