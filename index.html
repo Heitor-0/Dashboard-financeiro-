@@ -1135,19 +1135,34 @@
 
       <div class="card">
         <h3>Ranking de Categorias</h3>
-        <div id="category-ranking"></div>
+        <div class="chart-wrap" id="category-ranking-wrap">
+          <canvas id="category-ranking-chart" style="width: 100%; display: block;"></canvas>
+          <div class="chart-tooltip" id="ranking-tooltip"></div>
+        </div>
+        <div id="category-ranking-empty" class="empty-state hidden">Sem dados para exibir</div>
       </div>
     </div>
 
-    <div class="card" style="margin-top: 1rem;">
-      <h3>📊 Receita vs Gasto (últimos 6 meses)</h3>
-      <div class="chart-legend" style="margin-bottom: 10px;">
-        <span class="legend-item"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--success);"></span>Receita</span>
-        <span class="legend-item"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--danger);"></span>Gasto</span>
+    <div class="grid-2" style="margin-top: 1rem;">
+      <div class="card">
+        <h3>✅ Status das Movimentações</h3>
+        <div class="chart-wrap">
+          <canvas id="status-pie-chart" style="width: 100%; display: block;"></canvas>
+          <div class="chart-tooltip" id="status-pie-tooltip"></div>
+        </div>
+        <div id="status-pie-legend" style="display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; font-size: 12px; color: var(--text-secondary);"></div>
       </div>
-      <div class="chart-wrap">
-        <canvas id="income-expense-chart" style="width: 100%; display: block;"></canvas>
-        <div class="chart-tooltip" id="income-expense-tooltip"></div>
+
+      <div class="card">
+        <h3>📊 Receita vs Gasto (últimos 6 meses)</h3>
+        <div class="chart-legend" style="margin-bottom: 10px;">
+          <span class="legend-item"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--success);"></span>Receita</span>
+          <span class="legend-item"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--danger);"></span>Gasto</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="income-expense-chart" style="width: 100%; display: block;"></canvas>
+          <div class="chart-tooltip" id="income-expense-tooltip"></div>
+        </div>
       </div>
     </div>
 
@@ -2627,8 +2642,9 @@ function renderSubscriptions() {
 }
 
 function renderReports() {
-  renderCategoryRanking();
+  renderCategoryRankingChart();
   renderCategoryPieChart();
+  renderStatusPieChart();
   renderIncomeExpenseChart();
   renderInsights();
 }
@@ -2652,26 +2668,163 @@ function getCategoryColor(categoryId) {
   return palette[(idx >= 0 ? idx : 0) % 7];
 }
 
-function renderCategoryRanking() {
+function renderCategoryRankingChart() {
+  const canvas = document.getElementById('category-ranking-chart');
+  const empty = document.getElementById('category-ranking-empty');
+  if (!canvas) return;
+
   const ranking = globalConfig.categories
     .map(cat => ({ ...cat, spent: calculateCategorySpent(cat.id) }))
     .filter(c => c.spent > 0)
     .sort((a, b) => b.spent - a.spent)
-    .slice(0, 5);
+    .slice(0, 6);
 
-  const html = ranking.length > 0
-    ? ranking.map((c, i) => `<div style="padding: 8px 0; border-bottom: 1px solid var(--border-color);">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${getCategoryColor(c.id)};"></span>
-            <span>${i + 1}. ${c.emoji} ${c.name}</span>
-          </div>
-          <div style="font-weight: 600;">R$ ${formatValue(c.spent)}</div>
-        </div>
-      </div>`).join('')
-    : '<div class="empty-state">Sem dados para exibir</div>';
+  if (ranking.length === 0) {
+    canvas.style.display = 'none';
+    empty.classList.remove('hidden');
+    chartTooltipState['category-ranking-chart'] = null;
+    return;
+  }
+  canvas.style.display = 'block';
+  empty.classList.add('hidden');
 
-  document.getElementById('category-ranking').innerHTML = html;
+  const rowH = 36;
+  const width = canvas.parentElement.clientWidth;
+  const height = ranking.length * rowH + 6;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const styles = getComputedStyle(document.documentElement);
+  const textColor = styles.getPropertyValue('--text-primary').trim();
+  const mutedColor = styles.getPropertyValue('--text-secondary').trim();
+  const trackColor = styles.getPropertyValue('--bg-subtle').trim();
+
+  const maxVal = Math.max(...ranking.map(c => c.spent));
+  const labelW = Math.min(140, width * 0.34);
+  const valueW = Math.min(100, width * 0.24);
+  const barAreaX = labelW;
+  const barAreaW = Math.max(width - labelW - valueW, 30);
+  const barH = 14;
+
+  const hitRects = [];
+  ranking.forEach((c, i) => {
+    const y = i * rowH;
+    const barY = y + (rowH - barH) / 2;
+    const barW = Math.max((c.spent / maxVal) * barAreaW, 4);
+    const color = getCategoryColor(c.id);
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.fillStyle = textColor;
+    ctx.fillText(`${c.emoji} ${c.name}`, 0, y + rowH / 2);
+
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(barAreaX, barY, barAreaW, barH);
+
+    ctx.fillStyle = color;
+    ctx.fillRect(barAreaX, barY, barW, barH);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = mutedColor;
+    ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.fillText('R$ ' + formatValue(c.spent), width, y + rowH / 2);
+
+    hitRects.push({
+      x: barAreaX, y: barY, w: barAreaW, h: barH,
+      tx: barAreaX + barW / 2, ty: barY,
+      html: `<strong>${c.emoji} ${c.name}</strong><br>R$ ${formatValue(c.spent)}`
+    });
+  });
+
+  chartTooltipState['category-ranking-chart'] = rectHitTest(hitRects);
+  setupChartTooltip('category-ranking-chart', 'ranking-tooltip');
+}
+
+const STATUS_META = {
+  pago: { label: 'Pago', color: '--success' },
+  pendente: { label: 'Pendente', color: '--warning' },
+  agendado: { label: 'Agendado', color: '--text-secondary' }
+};
+
+function renderStatusPieChart() {
+  const canvas = document.getElementById('status-pie-chart');
+  const legendEl = document.getElementById('status-pie-legend');
+  if (!canvas) return;
+
+  const data = getMonthData();
+  const styles = getComputedStyle(document.documentElement);
+  const counts = { pago: 0, pendente: 0, agendado: 0 };
+  data.transactions.filter(t => t.type !== 'receita').forEach(t => {
+    if (counts[t.status] !== undefined) counts[t.status] += t.value;
+  });
+  const slices = Object.keys(counts)
+    .map(status => ({ status, value: counts[status] }))
+    .filter(s => s.value > 0);
+  const total = slices.reduce((sum, s) => sum + s.value, 0);
+
+  if (slices.length === 0) {
+    canvas.style.display = 'none';
+    legendEl.innerHTML = '<div class="empty-state">Sem movimentações neste mês</div>';
+    chartTooltipState['status-pie-chart'] = null;
+    return;
+  }
+  canvas.style.display = 'block';
+
+  const width = canvas.parentElement.clientWidth;
+  const height = 240;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const radius = Math.min(width, height) / 2 - 10;
+  const innerRadius = radius * 0.55;
+  const surface = styles.getPropertyValue('--bg-card').trim();
+  const textColor = styles.getPropertyValue('--text-primary').trim();
+  const mutedColor = styles.getPropertyValue('--text-secondary').trim();
+
+  let startAngle = -Math.PI / 2;
+  const legendItems = [];
+  const hitSlices = [];
+
+  slices.forEach(s => {
+    const meta = STATUS_META[s.status];
+    const color = styles.getPropertyValue(meta.color).trim();
+    const angle = (s.value / total) * Math.PI * 2;
+    drawDonutSlice(ctx, cx, cy, innerRadius, radius, startAngle, startAngle + angle, color, surface);
+    const pct = Math.round((s.value / total) * 100);
+    legendItems.push({ label: meta.label, color, pct });
+    hitSlices.push({ start: startAngle, end: startAngle + angle, html: `<strong>${meta.label}</strong><br>R$ ${formatValue(s.value)} · ${pct}%` });
+    startAngle += angle;
+  });
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = textColor;
+  ctx.font = '600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  ctx.fillText('R$ ' + formatValue(total), cx, cy + 5);
+  ctx.fillStyle = mutedColor;
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  ctx.fillText('Total do mês', cx, cy - 12);
+
+  legendEl.innerHTML = legendItems.map(li => `
+    <span class="legend-item"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${li.color};"></span>${li.label} — ${li.pct}%</span>
+  `).join('');
+
+  chartTooltipState['status-pie-chart'] = donutHitTest(cx, cy, innerRadius, radius, hitSlices);
+  setupChartTooltip('status-pie-chart', 'status-pie-tooltip');
 }
 
 function drawDonutSlice(ctx, cx, cy, innerR, outerR, startAngle, endAngle, color, surfaceColor) {
