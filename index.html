@@ -1136,13 +1136,24 @@ const DEFAULT_CATEGORIES = [
   { id: 'moradia', emoji: '🏠', name: 'Moradia', limit: 0 },
   { id: 'mercado', emoji: '🥦', name: 'Mercado', limit: 0 },
   { id: 'alimentacao', emoji: '🍔', name: 'Alimentação', limit: 0 },
+  { id: 'delivery', emoji: '🛵', name: 'Delivery', limit: 0 },
   { id: 'combustivel', emoji: '⛽', name: 'Combustível', limit: 0 },
+  { id: 'uber99', emoji: '🚕', name: 'Uber/99', limit: 0 },
   { id: 'lazer', emoji: '🎮', name: 'Lazer', limit: 0 },
   { id: 'saude', emoji: '⚕️', name: 'Saúde', limit: 0 },
+  { id: 'farmacia', emoji: '💊', name: 'Farmácia', limit: 0 },
   { id: 'compras', emoji: '🛍', name: 'Compras', limit: 0 },
   { id: 'educacao', emoji: '📚', name: 'Educação', limit: 0 },
   { id: 'assinaturas', emoji: '💻', name: 'Assinaturas', limit: 0 },
+  { id: 'pix', emoji: '💸', name: 'PIX', limit: 0 },
   { id: 'outros', emoji: '📌', name: 'Outros', limit: 0 }
+];
+
+const ADDED_DEFAULT_CATEGORIES = [
+  { id: 'farmacia', emoji: '💊', name: 'Farmácia', limit: 0 },
+  { id: 'pix', emoji: '💸', name: 'PIX', limit: 0 },
+  { id: 'delivery', emoji: '🛵', name: 'Delivery', limit: 0 },
+  { id: 'uber99', emoji: '🚕', name: 'Uber/99', limit: 0 }
 ];
 
 let globalConfig = {
@@ -1333,6 +1344,26 @@ function loadGlobalConfig() {
 
   migrateGoalsToBoxes();
   migrateSubscriptionsToGlobal();
+  migrateAddedCategories();
+}
+
+function migrateAddedCategories() {
+  const existingIds = new Set(globalConfig.categories.map(c => c.id));
+  const existingNames = new Set(globalConfig.categories.map(c => c.name.trim().toLowerCase()));
+  let changed = false;
+
+  ADDED_DEFAULT_CATEGORIES.forEach(cat => {
+    if (!existingIds.has(cat.id) && !existingNames.has(cat.name.trim().toLowerCase())) {
+      globalConfig.categories.push({ ...cat });
+      existingIds.add(cat.id);
+      existingNames.add(cat.name.trim().toLowerCase());
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    localStorage.setItem('financeGlobalConfig', JSON.stringify(globalConfig));
+  }
 }
 
 function migrateGoalsToBoxes() {
