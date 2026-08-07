@@ -1,0 +1,14 @@
+{
+  "name": "dashboard-financeiro",
+  "private": true,
+  "type": "module",
+  "description": "Dashboard financeiro pessoal (PWA estático, sem backend). Testes de regressão para o index.html.",
+  "scripts": {
+    "test:unit": "node --test tests/unit/*.test.mjs",
+    "test:e2e": "playwright test",
+    "test": "npm run test:unit && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
