@@ -1088,8 +1088,23 @@
             <option value="anual">Anual</option>
           </select>
           <select id="sub-category"></select>
-          <input type="text" id="sub-next-charge" placeholder="Próxima cobrança (DD/MM)">
+          <input type="text" id="sub-next-charge" placeholder="Próxima cobrança (DD/MM)" required>
         </div>
+        <div class="form-grid">
+          <select id="sub-payment" onchange="handleSubPaymentChange()">
+            <option value="pix">PIX</option>
+            <option value="debito">Débito</option>
+            <option value="credito">Crédito</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="transferencia">Transferência</option>
+          </select>
+          <div id="sub-card-select-section" style="display: none;">
+            <select id="sub-card">
+              <option value="">Selecione o cartão</option>
+            </select>
+          </div>
+        </div>
+        <p style="font-size: 12px; color: var(--text-secondary); margin: -0.5rem 0 1rem;">💡 A cobrança só entra como "Pago" no mês em que a data de cobrança já passou. Assinaturas no crédito ficam vinculadas à fatura do cartão escolhido.</p>
         <button type="submit">Adicionar Assinatura</button>
       </form>
     </div>
@@ -1105,6 +1120,7 @@
               <th>Periodicidade</th>
               <th>Próxima Cobrança</th>
               <th>Categoria</th>
+              <th>Pagamento</th>
               <th style="text-align: center;">Ação</th>
             </tr>
           </thead>
@@ -2612,6 +2628,8 @@ function renderSubscriptions() {
 
   globalConfig.subscriptions.forEach(s => {
     const cat = globalConfig.categories.find(c => c.id === s.category);
+    const card = s.payment === 'credito' && s.cardId ? globalConfig.creditCards.find(c => c.id === s.cardId) : null;
+    const paymentLabel = card ? `Crédito (${card.name})` : (s.payment || 'débito');
     const html = `
       <tr>
         <td>${s.name}</td>
@@ -2619,6 +2637,7 @@ function renderSubscriptions() {
         <td>${s.frequency}</td>
         <td>${s.nextCharge || '--'}</td>
         <td>${cat ? cat.emoji + ' ' + cat.name : 'N/A'}</td>
+        <td>${paymentLabel}</td>
         <td style="text-align: center;"><button class="delete-btn" onclick="deleteSubscription(${s.id})">Remover</button></td>
       </tr>
     `;
@@ -3328,6 +3347,12 @@ function handlePaymentChange() {
   section.style.display = payment === 'credito' ? 'block' : 'none';
 }
 
+function handleSubPaymentChange() {
+  const payment = document.getElementById('sub-payment').value;
+  const section = document.getElementById('sub-card-select-section');
+  section.style.display = payment === 'credito' ? 'block' : 'none';
+}
+
 function populateCardSelect() {
   const options = '<option value="">Selecione o cartão</option>' +
     globalConfig.creditCards.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
@@ -3337,6 +3362,9 @@ function populateCardSelect() {
 
   const installmentSel = document.getElementById('installment-card');
   if (installmentSel) installmentSel.innerHTML = options;
+
+  const subSel = document.getElementById('sub-card');
+  if (subSel) subSel.innerHTML = options;
 }
 
 function addTransaction(e) {
@@ -3596,6 +3624,22 @@ function renderIncomes() {
 const SUBSCRIPTION_INTERVAL_MONTHS = { mensal: 1, trimestral: 3, semestral: 6, anual: 12 };
 const SUBSCRIPTION_HORIZON_MONTHS = 24;
 
+function parseNextChargeDate(nextCharge, intervalMonths) {
+  const match = /^(\d{1,2})\/(\d{1,2})$/.exec((nextCharge || '').trim());
+  if (!match) return null;
+  const day = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10) - 1;
+  if (month < 0 || month > 11 || day < 1 || day > 31) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let firstCharge = new Date(today.getFullYear(), month, day);
+  while (firstCharge < today) {
+    firstCharge = new Date(firstCharge.getFullYear(), firstCharge.getMonth() + intervalMonths, day);
+  }
+  return { day, firstCharge, today };
+}
+
 function addSubscription(e) {
   e.preventDefault();
 
@@ -3604,11 +3648,26 @@ function addSubscription(e) {
   const frequency = document.getElementById('sub-frequency').value;
   const category = document.getElementById('sub-category').value;
   const nextCharge = document.getElementById('sub-next-charge').value;
+  const payment = document.getElementById('sub-payment').value;
+  const cardId = payment === 'credito' ? document.getElementById('sub-card').value : '';
 
-  if (!name || !value || !frequency || !category) {
+  if (!name || !value || !frequency || !category || !nextCharge) {
     alert('Preencha todos os campos obrigatórios');
     return;
   }
+
+  if (payment === 'credito' && !cardId) {
+    alert('Selecione qual cartão será usado nesta assinatura');
+    return;
+  }
+
+  const intervalMonths = SUBSCRIPTION_INTERVAL_MONTHS[frequency] || 1;
+  const parsed = parseNextChargeDate(nextCharge, intervalMonths);
+  if (!parsed) {
+    alert('Informe a próxima cobrança no formato DD/MM');
+    return;
+  }
+  const { day, firstCharge, today } = parsed;
 
   const subscriptionId = Date.now();
   globalConfig.subscriptions.push({
@@ -3617,29 +3676,32 @@ function addSubscription(e) {
     value,
     frequency,
     category,
-    nextCharge
+    nextCharge,
+    payment,
+    cardId: cardId ? Number(cardId) : null
   });
   localStorage.setItem('financeGlobalConfig', JSON.stringify(globalConfig));
 
-  const intervalMonths = SUBSCRIPTION_INTERVAL_MONTHS[frequency] || 1;
   const occurrences = Math.floor(SUBSCRIPTION_HORIZON_MONTHS / intervalMonths) + 1;
 
   for (let i = 0; i < occurrences; i++) {
-    const monthDate = new Date(currentYear, currentMonth + i * intervalMonths, 1);
+    const occurrenceMonth = firstCharge.getMonth() + i * intervalMonths;
+    const monthDate = new Date(firstCharge.getFullYear(), occurrenceMonth, 1);
     const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth()).padStart(2, '0')}`;
     if (!monthlyData[monthKey]) {
       monthlyData[monthKey] = { transactions: [], invoices: [], incomes: [], reserve: [] };
     }
+    const occurrenceDate = new Date(firstCharge.getFullYear(), occurrenceMonth, day);
     monthlyData[monthKey].transactions.push({
       id: subscriptionId + i,
       subscriptionId,
-      date: nextCharge || '01/01',
+      date: nextCharge,
       description: name,
       category,
       type: 'fixo',
-      payment: 'debito',
-      cardId: null,
-      status: 'pago',
+      payment,
+      cardId: cardId ? Number(cardId) : null,
+      status: occurrenceDate <= today ? 'pago' : 'pendente',
       value,
       installments: 1
     });
@@ -3647,6 +3709,7 @@ function addSubscription(e) {
 
   saveMonthlyData();
   e.target.reset();
+  handleSubPaymentChange();
   renderSubscriptions();
   updateDashboard();
 }
